@@ -18,10 +18,12 @@ CONFIG += static debug
 
 SOURCES += main.cpp\
         swimwindow.cpp \
-    apwidget.cpp
+    apwidget.cpp \
+    settings.cpp
 
 HEADERS  += swimwindow.h \
-    apwidget.h
+    apwidget.h \
+    settings.h
 
 RESOURCES += \
     icons.qrc

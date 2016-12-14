@@ -2,6 +2,7 @@
 #define SWIMWINDOW_H
 
 #include <QApplication>
+#include <QMainWindow>
 #include <QWidget>
 #include <QProcess>
 #include <QStringList>
@@ -16,17 +17,21 @@
 #include <QLabel>
 #include <QResizeEvent>
 #include <QVector>
+#include <QStatusBar>
+#include <QPushButton>
 #include "apwidget.h"
+#include "settings.h"
 
 enum sizes: int {DEF_WIDTH = 650, DEF_HEIGHT = 360, SPACING = 5};
 enum ifconsts: int {INET_STRING = 2, STATUS_STRING = 5, SSID_STRING = 6};
 
-class SwiMWindow : public QFrame
+class SwiMWindow : public QMainWindow
 {
     Q_OBJECT
 
     QComboBox *cbxInterfaces = nullptr;
-    QProcess *process = nullptr;
+
+    QFrame *mainFrame;
     QString interface = "wlan0";
     QString s_err = "";
     QString s_output = "";
@@ -39,12 +44,14 @@ class SwiMWindow : public QFrame
     QLabel *lErr;
     QLabel *lInterface;
     QLabel *lblList;
+    QPushButton *btnRefresh;
 
     QVector<APWidget*> aps;
+    Settings settings{this, "swim", "swim"};
 
     void getInterfaces();
     void setInterface(const QString& iface);
-    bool runCommand(const QString& sCommand);
+    bool runCommand(const QString& sCommand, const QString& grepArgs = "");
     void setError(const QString& s) {lErr->setText(s);}
     void createControls();
     QString connectedSSID();
@@ -59,6 +66,7 @@ public:
 
 public slots:
     void slotInterfaceSelected(const QString& interface) { setInterface(interface);}
+    void slotRefresh() {setInterface(interface);}
 };
 
 #endif // SWIMWINDOW_H

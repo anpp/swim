@@ -1,28 +1,30 @@
 #include "swimwindow.h"
 
 SwiMWindow::SwiMWindow(QWidget *parent)
-    : QFrame(parent)
+    : QMainWindow(parent)
 {
-    process = new QProcess(this);
     createControls();
     getInterfaces();
 
     connect(cbxInterfaces, SIGNAL(currentIndexChanged (const QString &)), SLOT(slotInterfaceSelected(const QString &)));
-
+    connect(btnRefresh, SIGNAL(clicked()), SLOT(slotRefresh()));
     cbxInterfaces->setCurrentIndex(cbxInterfaces->findText(interface));
 
     this->resize(DEF_WIDTH, DEF_HEIGHT);
     this->setWindowIcon(QIcon(":/icons/wifi_manager.png"));
     QApplication::setStyle("plastique");
+
+    settings.loadSettings();
 }
 
 SwiMWindow::~SwiMWindow()
 {
-  delete cbxInterfaces;
-  delete tableAPs;
-  delete lErr;
-  delete lInterface;
-  delete process;
+    settings.saveSettings();
+    delete cbxInterfaces;
+    delete tableAPs;
+    delete lErr;
+    delete lInterface;
+    delete mainFrame;
 }
 
 void SwiMWindow::getInterfaces()
@@ -36,9 +38,11 @@ void SwiMWindow::getInterfaces()
 
 void SwiMWindow::createControls()
 {
+    mainFrame = new QFrame(this);
     lTop = new QHBoxLayout();
-    lMain = new QVBoxLayout(this);
+    lMain = new QVBoxLayout(mainFrame);
 
+    btnRefresh = new QPushButton(tr("Refresh"));
     tableAPs = new QTableWidget();
     tableAPs->setFrameStyle(QFrame::NoFrame);
     tableAPs->setStyleSheet("QTableWidget{selection-background-color: transparent; background-color: transparent}");
@@ -51,39 +55,48 @@ void SwiMWindow::createControls()
 
     lTop->addWidget(lInterface);
     lTop->addWidget(cbxInterfaces);
+    lTop->addWidget(btnRefresh);
     lTop->addStretch();
 
     lMain->addLayout(lTop);
     lMain->addSpacing(SPACING);
     lMain->addWidget(lblList);
     lMain->addWidget(tableAPs);
-    lMain->addWidget(lErr);
+    mainFrame->setLayout(lMain);
+
+    this->setCentralWidget(mainFrame);
+    this->statusBar()->addWidget(lErr);
 }
 
 QString SwiMWindow::connectedSSID()
 {
-    QStringList sl;
     QString ssid, status, inet, return_ssid = "";
 
-    if(!runCommand("ifconfig " + interface))
+    if(!runCommand("ifconfig " + interface, "-a ssid"))
     {
         setError(s_err);
         return return_ssid;
     }
-
-    sl = s_output.split("\n");
-
-    ssid = removeChar(sl.at(SSID_STRING), '\t');
-    status = removeChar(sl.at(STATUS_STRING), '\t');
-    inet = removeChar(sl.at(INET_STRING), '\t');
-
-    sl = ssid.split(" ");
+    ssid = removeChar(removeChar(s_output, '\t'), '\n');
+    if(!runCommand("ifconfig " + interface, "-a status"))
+    {
+        setError(s_err);
+        return return_ssid;
+    }
+    status = removeChar(removeChar(s_output, '\t'), '\n');
+    if(!runCommand("ifconfig " + interface, "-a inet"))
+    {
+        setError(s_err);
+        return return_ssid;
+    }
+    inet = removeChar(removeChar(s_output, '\t'), '\n');
 
     if(status == "status: associated")
     {
-        return_ssid = sl.at(1);
-        sl = inet.split(" ");
-        connected_IP = sl.at(1);
+        if(ssid.contains(' '))
+            return_ssid = ssid.split(" ").at(1);
+        if(inet.contains(' '))
+            connected_IP = inet.split(" ").at(1);
     }
     return return_ssid;
 }
@@ -91,7 +104,7 @@ QString SwiMWindow::connectedSSID()
 QString SwiMWindow::removeChar(const QString &s, const QChar& c)
 {
     QString res = "";
-    for(QChar ch: s)
+    for(auto ch: s)
     {
         if(ch != c)
             res.push_back(ch);
@@ -101,22 +114,35 @@ QString SwiMWindow::removeChar(const QString &s, const QChar& c)
 
 void SwiMWindow::setActiveAP(const QString &ssid)
 {
-    for(APWidget* apw: aps)
+    for(auto apw: aps)
         apw->setConnected(apw->getSSID() == ssid);
 }
 
 
-bool SwiMWindow::runCommand(const QString& sCommand)
+bool SwiMWindow::runCommand(const QString& sCommand, const QString& grepArgs)
 {
+    QProcess process;
+    QProcess grepProcess;
     s_err = "";
     s_output = "";
-    if(process == nullptr)
-        return false;
-    process->start(sCommand);
-    process->waitForFinished();
+    QProcess *outputProcess = &process;
 
-    s_err = process->readAllStandardError();
-    s_output = process->readAllStandardOutput();
+    if(grepArgs != "")
+    {
+        process.setStandardOutputProcess(&grepProcess);
+        outputProcess = &grepProcess;
+    }
+    process.start(sCommand);
+    process.waitForFinished();
+
+    if(outputProcess != &process)
+    {
+        grepProcess.start("grep " + grepArgs);
+        grepProcess.waitForFinished();
+    }
+
+    s_err = removeChar(process.readAllStandardError(), '\n');
+    s_output = outputProcess->readAllStandardOutput();
     return (s_err == "" || s_err.isEmpty());
 }
 
@@ -128,7 +154,7 @@ void SwiMWindow::setInterface(const QString& iface)
 
     setError("");
 
-    for(APWidget* apw: aps)
+    for(auto apw: aps)
         delete apw;
     aps.clear();
     tableAPs->setRowCount(0);
@@ -138,13 +164,11 @@ void SwiMWindow::setInterface(const QString& iface)
     tableAPs->verticalHeader()->hide();
     tableAPs->horizontalHeader()->hide();
 
-    if(!runCommand("ifconfig -v " + interface + " list scan"))
+    if(!runCommand("ifconfig -v " + interface + " list scan", "-va BSSID"))
         setError(s_err);
     else
     {
         sl = s_output.split("\n");
-        sl.pop_front(); //первую строку убираем, в ней заголовок
-
         connected_SSID = connectedSSID();
         for(QString s: sl)
         {
@@ -158,7 +182,7 @@ void SwiMWindow::setInterface(const QString& iface)
         }
         tableAPs->setRowCount(aps.count());
         int i = 0;
-        for(APWidget* apw: aps)
+        for(auto apw: aps)
         {
             tableAPs->setColumnWidth(0, tableAPs->width());
             tableAPs->setRowHeight(i, apw->height());
@@ -166,7 +190,6 @@ void SwiMWindow::setInterface(const QString& iface)
             apw->resize(tableAPs->width(), apw->height());
 
             tableAPs->setCellWidget(i++, 0, apw);
-
         }
         setActiveAP(connected_SSID);
         setError(tr("Connected to ") + connected_SSID + " (IP: " + connected_IP + ")");
@@ -177,7 +200,7 @@ void SwiMWindow::resizeEvent (QResizeEvent *event)
 {
     this->QWidget::resizeEvent(event);
     tableAPs->setColumnWidth(0, tableAPs->width());
-    for(int i = 0; i < tableAPs->rowCount(); ++i)
-        tableAPs->cellWidget(i, 0)->resize(tableAPs->width(), tableAPs->cellWidget(i, 0)->height());
+    for(auto apw: aps)
+        apw->resize(tableAPs->width(), apw->height());
 }
 
