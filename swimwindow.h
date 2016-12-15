@@ -22,8 +22,7 @@
 #include "apwidget.h"
 #include "settings.h"
 
-enum sizes: int {DEF_WIDTH = 650, DEF_HEIGHT = 360, SPACING = 5};
-enum ifconsts: int {INET_STRING = 2, STATUS_STRING = 5, SSID_STRING = 6};
+enum num_consts: int {SPACING = 5};
 
 class SwiMWindow : public QMainWindow
 {
@@ -57,9 +56,11 @@ class SwiMWindow : public QMainWindow
     QString connectedSSID();
     QString removeChar(const QString& s, const QChar& c);
     void setActiveAP(const QString& ssid);
+    void resizeTable();
 
 protected:
     void resizeEvent (QResizeEvent *event);
+    void showEvent(QShowEvent *event);
 public:
     SwiMWindow(QWidget *parent = 0);
     ~SwiMWindow();

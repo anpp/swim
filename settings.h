@@ -10,6 +10,7 @@
 #include <QVariant>
 
 
+enum defs: int {def_width = 650, def_height = 360};
 
 enum kindset: int {screen = 0};
 

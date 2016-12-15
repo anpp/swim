@@ -10,10 +10,8 @@ SwiMWindow::SwiMWindow(QWidget *parent)
     connect(btnRefresh, SIGNAL(clicked()), SLOT(slotRefresh()));
     cbxInterfaces->setCurrentIndex(cbxInterfaces->findText(interface));
 
-    this->resize(DEF_WIDTH, DEF_HEIGHT);
     this->setWindowIcon(QIcon(":/icons/wifi_manager.png"));
     QApplication::setStyle("plastique");
-
     settings.loadSettings();
 }
 
@@ -45,7 +43,8 @@ void SwiMWindow::createControls()
     btnRefresh = new QPushButton(tr("Refresh"));
     tableAPs = new QTableWidget();
     tableAPs->setFrameStyle(QFrame::NoFrame);
-    tableAPs->setStyleSheet("QTableWidget{selection-background-color: transparent; background-color: transparent}");
+    tableAPs->setStyleSheet("QTableWidget{selection-background-color: transparent; background-color: transparent; border-top: 1px solid gray}");
+    tableAPs->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 
 
     cbxInterfaces = new QComboBox();
@@ -184,11 +183,7 @@ void SwiMWindow::setInterface(const QString& iface)
         int i = 0;
         for(auto apw: aps)
         {
-            tableAPs->setColumnWidth(0, tableAPs->width());
             tableAPs->setRowHeight(i, apw->height());
-
-            apw->resize(tableAPs->width(), apw->height());
-
             tableAPs->setCellWidget(i++, 0, apw);
         }
         setActiveAP(connected_SSID);
@@ -199,8 +194,19 @@ void SwiMWindow::setInterface(const QString& iface)
 void SwiMWindow::resizeEvent (QResizeEvent *event)
 {
     this->QWidget::resizeEvent(event);
+    resizeTable();
+}
+
+void SwiMWindow::showEvent(QShowEvent *event)
+{
+    this->QWidget::showEvent(event);
+    resizeTable();
+}
+
+
+void SwiMWindow::resizeTable()
+{
     tableAPs->setColumnWidth(0, tableAPs->width());
     for(auto apw: aps)
         apw->resize(tableAPs->width(), apw->height());
 }
-
